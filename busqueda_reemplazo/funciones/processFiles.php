@@ -30,6 +30,7 @@ function replaceTokens(string $content, array $replacements): string
 
     foreach (RULERS as $type => $pattern) {
         $content = preg_replace_callback($pattern, function ($matches) use ($type, $replacements) {
+            # procesar contenido PHP dentro de <?php o <? 
             if ($type === 'php') {
                 $inner = $matches[2];
                 // --- excepción: no tocar includes/requires ---
@@ -65,17 +66,12 @@ function replaceTokens(string $content, array $replacements): string
                         // lo que quede después del último include
                         $result .= replaceTokensInText(substr($inner, $lastPos), $replacements);
                     } else {
+                        // si no hay includes/requires, procesar todo normalmente
                         $result = replaceTokensInText($inner, $replacements);
                     }
-
                     // *** clave: devolver apertura y cierre EXACTOS ***
                     return $open . $result . $close;
                 }
-
-
-                // si no hay includes/requires, procesar todo normalmente
-                $processed = replaceTokensInText($inner, $replacements);
-                return '<?' . $processed . '?>';
             } else {
                 // caso atributos (img[src], a[href])
                 $attr = $matches[1];
