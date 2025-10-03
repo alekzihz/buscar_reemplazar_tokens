@@ -1,12 +1,12 @@
 <?php
 // RULERS a utilizar en el proceso de búsqueda y reemplazo
 /*
-    *  PHP => bloques de código <? ... ?>
+    *  PHP => bloques de código <? ... ?> o <?php ... ?> o <? en archivos full php no siempre tienen el cierre ?>
     *  IMG => atributo src en etiquetas <img>
     *  A => atributo href en etiquetas <a>
  * */
 define('RULERS', [
-    'php' => '/<\?(.*?)\?>/s',                   // bloque PHP <? ...
+    'php' => '/(<\?(?:php)?)(.*?)(\?>|$)/is',
     'img_src' => '/<img\b[^>]*\bsrc="([^"]*)"/i', // atributo src en <img>
     'a_href' => '/<a\b[^>]*\bhref="([^"]*)"/i',   // atributo href en <a>
 ]);
@@ -31,7 +31,7 @@ function replaceTokens(string $content, array $replacements): string
     foreach (RULERS as $type => $pattern) {
         $content = preg_replace_callback($pattern, function ($matches) use ($type, $replacements) {
             if ($type === 'php') {
-                $inner = $matches[1];
+                $inner = $matches[2];
                 // --- excepción: no tocar includes/requires ---
                 // capturamos todos los includes/requires para guardarlos
                 preg_match_all(
@@ -41,27 +41,37 @@ function replaceTokens(string $content, array $replacements): string
                     PREG_OFFSET_CAPTURE
                 );
 
-                if ($incMatches[0]) {
-                    $result = '';
-                    $lastPos = 0;
-                    foreach ($incMatches[0] as $incMatch) {
-                        [$incCode, $pos] = $incMatch;
+                if ($type === 'php') {
+                    $open  = $matches[1];   // '<?php' o '<?'
+                    $inner = $matches[2];   // contenido entre apertura y cierre
+                    $close = $matches[3];   // cierre de php si existe 
 
-                        // procesar lo que hay ANTES del include
-                        $before = substr($inner, $lastPos, $pos - $lastPos);
-                        $result .= replaceTokensInText($before, $replacements);
+                    // excepción: no tocar includes/requires
+                    preg_match_all(EXCEPTIONS['include'], $inner, $incMatches, PREG_OFFSET_CAPTURE);
 
-                        // dejar el include intacto
-                        $result .= $incCode;
+                    if ($incMatches[0]) {
+                        $result  = '';
+                        $lastPos = 0;
+                        foreach ($incMatches[0] as $incMatch) {
+                            [$incCode, $pos] = $incMatch;
 
-                        // actualizar posición
-                        $lastPos = $pos + strlen($incCode);
+                            $before  = substr($inner, $lastPos, $pos - $lastPos);
+                            $result .= replaceTokensInText($before, $replacements); // procesas solo lo de antes
+
+                            $result .= $incCode; // el include/require intacto
+
+                            $lastPos = $pos + strlen($incCode);
+                        }
+                        // lo que quede después del último include
+                        $result .= replaceTokensInText(substr($inner, $lastPos), $replacements);
+                    } else {
+                        $result = replaceTokensInText($inner, $replacements);
                     }
-                    // procesar lo que queda después del último include
-                    $result .= replaceTokensInText(substr($inner, $lastPos), $replacements);
 
-                    return '<?' . $result . '?>';
+                    // *** clave: devolver apertura y cierre EXACTOS ***
+                    return $open . $result . $close;
                 }
+
 
                 // si no hay includes/requires, procesar todo normalmente
                 $processed = replaceTokensInText($inner, $replacements);
