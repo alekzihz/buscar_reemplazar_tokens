@@ -1,10 +1,25 @@
 <?php
-// excepciones para no tocar ciertos bloques
-define('EXCEPCIONES', [
-    'php' => '/<\?(.*?)\?>/s',                   // bloque <? ... 
+// RULERS a utilizar en el proceso de búsqueda y reemplazo
+/*
+    *  PHP => bloques de código <? ... ?>
+    *  IMG => atributo src en etiquetas <img>
+    *  A => atributo href en etiquetas <a>
+ * */
+define('RULERS', [
+    'php' => '/<\?(.*?)\?>/s',                   // bloque PHP <? ...
     'img_src' => '/<img\b[^>]*\bsrc="([^"]*)"/i', // atributo src en <img>
     'a_href' => '/<a\b[^>]*\bhref="([^"]*)"/i',   // atributo href en <a>
-    'include' => '/\b(include|require)(_once)?\s*\(.*?\)\s*;?/i'  // includes/requires
+]);
+
+# EXCEPTIONS patrón para no tocar includes/requires
+/*
+    * <?php include 'file.php'; ?>
+    * <?php require_once("file.php"); ?>
+    * <?php include_once 'file.php'; ?>
+    * <?php require("file.php"); ?>
+ * */
+define('EXCEPTIONS', [
+    'include' => '/\b(include|require)(_once)?\s*(\()?\s*[^;]+(?(3)\))\s*;?/i'
 ]);
 /**
  * Reemplaza tokens en el contenido de un archivo.
@@ -13,14 +28,14 @@ define('EXCEPCIONES', [
 function replaceTokens(string $content, array $replacements): string
 {
 
-    foreach (EXCEPCIONES as $type => $pattern) {
+    foreach (RULERS as $type => $pattern) {
         $content = preg_replace_callback($pattern, function ($matches) use ($type, $replacements) {
             if ($type === 'php') {
                 $inner = $matches[1];
                 // --- excepción: no tocar includes/requires ---
                 // capturamos todos los includes/requires para guardarlos
                 preg_match_all(
-                    EXCEPCIONES['include'],
+                    EXCEPTIONS['include'],
                     $inner,
                     $incMatches,
                     PREG_OFFSET_CAPTURE
