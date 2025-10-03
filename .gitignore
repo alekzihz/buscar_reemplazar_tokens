@@ -1,3 +1,8 @@
 replace_log.txt
 *.bak
 *.txt
+/vendor
+*.phpunit.cache
+/coverage
+phpunit.xml
+exampleTest.php
